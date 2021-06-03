@@ -168,7 +168,7 @@ func (e EventFetcherBuilder) SendEventsToWebhook(webhook string) (*discordgo.Mes
 	return eventHook.SendEventsToWebhook(events)
 }
 
-func (e EventFetcherBuilder) Run() ([]*FormatedEvent, error) {
+func (e *EventFetcherBuilder) Run() ([]*FormatedEvent, error) {
 
 	//if we have a progress file read the value from it and set it as oldHeight
 	if e.ProgressFile != "" {
@@ -205,6 +205,7 @@ func (e EventFetcherBuilder) Run() ([]*FormatedEvent, error) {
 			return nil, err
 		}
 		endIndex = header.Height
+		e.EndIndex = endIndex
 	}
 
 	fromIndex := e.FromIndex
