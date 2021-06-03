@@ -218,7 +218,7 @@ func (e *EventFetcherBuilder) Run() ([]*FormatedEvent, error) {
 		return nil, errors.New("FromIndex is negative")
 	}
 
-	if endIndex > uint64(fromIndex) {
+	if uint64(fromIndex) > endIndex {
 		return nil, nil
 	}
 
