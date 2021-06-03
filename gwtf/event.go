@@ -218,6 +218,10 @@ func (e *EventFetcherBuilder) Run() ([]*FormatedEvent, error) {
 		return nil, errors.New("FromIndex is negative")
 	}
 
+	if endIndex > uint64(fromIndex) {
+		return nil, nil
+	}
+
 	log.Printf("Fetching events from %d to %d", fromIndex, endIndex)
 
 	formatedEvents, err := fetchEvents(e.GoWithTheFlow.Address,
