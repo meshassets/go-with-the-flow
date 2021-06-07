@@ -31,6 +31,7 @@ type EventFetcherBuilder struct {
 	Ctx                   context.Context
 	NumberOfWorkers       int
 	EventBatchSize        uint64
+	ExistingFlowClient    *client.Client
 }
 
 // SendEventsTo starts a event hook builder
@@ -193,14 +194,17 @@ func (e *EventFetcherBuilder) Run() ([]*FormatedEvent, error) {
 		}
 	}
 
-	c, err := client.New(e.GoWithTheFlow.Address, grpc.WithInsecure(), grpc.WithMaxMsgSize(maxGRPCMessageSize))
-	if err != nil {
-		return nil, err
+	if e.ExistingFlowClient == nil {
+		c, err := client.New(e.GoWithTheFlow.Address, grpc.WithInsecure(), grpc.WithMaxMsgSize(maxGRPCMessageSize))
+		if err != nil {
+			return nil, err
+		}
+		e.ExistingFlowClient = c
 	}
 
 	endIndex := e.EndIndex
 	if e.EndAtCurrentHeight {
-		header, err := c.GetLatestBlockHeader(e.Ctx, true)
+		header, err := e.ExistingFlowClient.GetLatestBlockHeader(e.Ctx, true)
 		if err != nil {
 			return nil, err
 		}
@@ -224,7 +228,7 @@ func (e *EventFetcherBuilder) Run() ([]*FormatedEvent, error) {
 
 	log.Printf("Fetching events from %d to %d", fromIndex, endIndex)
 
-	formatedEvents, err := fetchEvents(e.GoWithTheFlow.Address,
+	formatedEvents, err := fetchEvents(e.ExistingFlowClient,
 		e.EventsAndIgnoreFields,
 		uint64(fromIndex),
 		endIndex,
@@ -249,7 +253,7 @@ func (e *EventFetcherBuilder) Run() ([]*FormatedEvent, error) {
 
 }
 
-func fetchEvents(address string, eventsWithIgnoreFields map[string][]string, startBlock uint64, endBlock uint64, blockCount uint64, workerCount int) ([]*FormatedEvent, error) {
+func fetchEvents(flowClient *client.Client, eventsWithIgnoreFields map[string][]string, startBlock uint64, endBlock uint64, blockCount uint64, workerCount int) ([]*FormatedEvent, error) {
 
 	var queries []EventRangeQueryWithIngnorefields
 	for startBlock <= endBlock {
@@ -277,7 +281,7 @@ func fetchEvents(address string, eventsWithIgnoreFields map[string][]string, sta
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			eventWorker(jobChan, results, address)
+			eventWorker(jobChan, results, flowClient)
 		}()
 	}
 
@@ -307,10 +311,9 @@ func fetchEvents(address string, eventsWithIgnoreFields map[string][]string, sta
 
 }
 
-func eventWorker(jobChan <-chan EventRangeQueryWithIngnorefields, results chan<- EventWorkerResult, address string) {
-	flowClient, err := client.New(address, grpc.WithInsecure(), grpc.WithMaxMsgSize(1_000_000_000))
-	if err != nil {
-		results <- EventWorkerResult{nil, err}
+func eventWorker(jobChan <-chan EventRangeQueryWithIngnorefields, results chan<- EventWorkerResult, flowClient *client.Client) {
+	if flowClient == nil {
+		results <- EventWorkerResult{nil, errors.Errorf("no flow client")}
 	}
 	for eventQuery := range jobChan {
 		var events []*FormatedEvent
